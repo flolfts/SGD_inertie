@@ -1,0 +1,1169 @@
+\documentclass{article}
+\usepackage{xcolor}
+\usepackage{subfigure}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{listings}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{algpseudocode}
+\usepackage{natbib}
+\usepackage{enumitem}
+
+\usepackage[francais]{babel}
+\usepackage{geometry}
+    \geometry{
+    a4paper,
+    total={170mm,257mm},
+    left=20mm,
+    top=20mm,
+ }
+
+\title{Stage de recherche en optimisation}
+\author{Florian Lafontas}
+\date{Août 2023}
+
+\newtheorem{lemma}{Lemme}
+\newtheorem{prop}{Proposition}
+\newtheorem{preuve}{Preuve}
+
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+\section{Introduction}
+
+Ce stage se consacre à l'étude des différentes méthodes de descente de gradient dans le cadre du machine learning, plus précisément des méthodes de gradient stochastique à inertie. Nous en étudierons la preuve de convergence qui permet de s'assurer que l'on va bien converger vers le minimum. 
+
+\bigskip
+
+Tout d'abord il convient de définir ce qu'est une méthode de descente de  gradient. Une méthode de descente de gradient est une méthode pouvant s'écrire sous la forme d'un algorithme d'optimisation, qui nous permet pour une fonction donnée de tendre avec une bonne précision et un pas suffisamment petit pour converger, vers ses points critiques.
+
+\bigskip
+
+Le but d'un algorithme de descente de gradient est donc d'obtenir la condition $ \Vert \nabla F(x)  \Vert \rightarrow 0$ pour tendre vers les points critiques (on s'arrête lorsque le test d'arrêt dépasse la tolérance $ \Vert \nabla F(x)  \Vert \leq \epsilon$ avec $\epsilon \geq 0$ le seuil de tolérance associé) .
+
+\bigskip
+
+Il existe des théorèmes comme le théorème de Polyak Lojasizwicz pour permettre de controler la valeur de la fonction-objectif en fonction de la direction du gradient et permettent alors si le gradient est nul d'obtenir un infimum, f(x) = inf f donc si on obtient un point critique à l'aide de ces méthodes on saura que c’est le minimum (convergence des valeurs de la fonction)).
+
+\bigskip
+
+Il convient également de noter qu'il existe trois types de convergence importantes qui vont nous intéresser pendant notre étude : 
+
+- la convergence du gradient vers 0 :  $ \Vert \nabla F(x)  \Vert \rightarrow 0 \quad \Rightarrow $ on retrouve bien les points critiques
+
+-la convergence de la norme des itérés vers 0 : si on a plusieurs points critiques qui s'alternent la norme des itérés de convergera pas $\quad \Rightarrow$ soit $x^0$ la première itération de la méthode, $x^n$ et $x^{n+1}$ tendront à etre très proche et converger vers une meme valeur pour n grand (ainsi si on a plusieurs points critiques on n'est pas garanti de voir les itéres converger vers une valeur unique)
+
+- la convergence des valeurs de la fonction vers un infimum : f(x) = inf, implique que si l'on trouve un point critique c'est bien le minimum
+
+\bigskip
+
+Dans notre étude, nous allons nous intéresser à une première manière d'optimiser la descente de gradient et de minimiser la fonction ojectif : la méthode de descente de gradient stochastique notée SGD. Son algorithme permet de faciliter le calcul des gradients et de s'adapter aux cas où certains paramètres doivent être estimées et où il faut prendre en compte les erreurs et aléas qui en sont liés : c'est notamment utilisé pour le Big Data pour améliorer le coût de calcul lorsque le gradient à calculer doit être estimé, car trop grand et coûteux. Le SGD converge globalement avec une vitesse de convergence de l'ordre de $1/\sqrt{N}$ (N nombre d'itérations) pour un objet F différentiable (dont la variance des gradients est bornée).
+
+\bigskip
+
+Contrairement aux méthodes adaptatives que nous verrons maintenant il est important également de noter que le SGD repose sur le fait que l'on ait toujours la même condition de différentiabilité de la fonction objectif à chaque itération. 
+
+\bigskip
+
+De plus, dans le cadre de ce stage, nous allons également ajouter la notion d'"inertie" à l'algorithme du SGD pour que l'algorithme garde en mémoire les moyennes précédentes et converge plus lentement mais plus surement vers le point critique. Au lieu 
+
+\bigskip
+
+En effet, une contrainte importante des méthodes de descente de gradient est que celles-ci renvoient des directions de descente orthogonales pour converger le plus vite possible vers le point critique. Pour résoudre ce problème on rajoute une "inertie" ("heavy ball" en anglais, car cela fait comme si "on faisait tomber une boule sur le graphe de la fonction et de la soumettre à son poids en considérant en plus les forces de friction" (WEISS, 2015)). Cette inertie permet d'obtenir un meilleur comportement de l'algorithme pour beaucoup de cas de minimisation en ayant une direction de descente moins abrupte et en minimisant alors les oscillations.
+
+\bigskip
+
+Présentons maintenant la forme générique des algorithmes de descente de gradient qui nous intéressent :
+
+\bigskip
+
+\underline{Ecriture générique du SGD sans inertie }:\\
+
+On tire de manière uniforme les indices $i_t \in \{1,...,N\}$ avec une probabilité 1/N
+\begin{equation*}
+\left\{
+\begin{array}{rcl}
+x^{t+1}=x^t - \alpha_t \nabla f_{i_t}(x^t) \hspace{1cm} \textrm{avec $\alpha_t$ le pas/learning rate}
+\end{array}
+\right.
+\end{equation*}
+
+
+\bigskip
+
+\underline{Ecriture générique du SGD avec inertie }:\\
+
+\textrm{On tire de manière uniforme les indices $i_t \in \{1,...,N\}$ avec une probabilité 1/N}
+\begin{equation*}
+\left\{
+\begin{array}{@{} l @{} l @{}}
+m^t= \beta_t m^{t-1} + \nabla f_{i_t}(x^t) \hspace{0.2cm} \\
+x^{t+1}=x^t - \alpha_t m^t \hspace{1cm} 
+\end{array}
+\right.
+\end{equation*}
+
+Aavec $\beta_t$, terme d'inertie et $m^t$ calculant pour une itération la moyenne des gradients précédents, et $\alpha_t$ le pas/learning rate
+
+\bigskip
+
+\underline{Ecriture du SGD avec inertie dans le cadre de notre étude}:\\
+\begin{equation*}
+\left\{
+\begin{array}{@{} l @{} l @{}}
+m_n= \beta_1 m_{n-1} + \nabla f_n(x_{n-1}) \\ 
+x_n=x_{n-1}-\alpha m_n \hspace{1cm} 
+\end{array}
+\right.
+\end{equation*}
+
+Les notations pour ce couple d'équations seront définies plus tard, page \pageref{eq:equation1}
+\bigskip
+
+Ces dernières années, de nouvelles méthodes de descente de gradient dites "adaptatives" ont émergé en optimisation comme Adagrad (amélioration du SGD où le pas/learning rate s'"adapte" et se calcule automatiquement, marche aussi pour un bon nombre de cas non convexes, se calcule avec les éléments diagonaux du gradient de la fonction objectif (BHAT, 2020)) ou RMSprop. Mais depuis 2015, un nouvel algorithme se développe et surpasse notamment en terme de popularité et d'efficacité les autres algorithmes : la méthode d'Adam.
+\bigskip
+
+Cet algorithme s'écrit de la manière suivante :
+
+\bigskip
+
+\begin{algorithm}
+\caption{Algorithme d'Adam}
+\begin{algorithmic}[1]
+\REQUIRE $\alpha$: stepsize/ taille du pas
+\REQUIRE $\beta_1$, $\beta_2 \in [0,1]$: Exponential decay rates for the moment estimatse
+\REQUIRE $f(\theta)$: Stochastic objective function with parameters $\theta$
+\REQUIRE $\theta_0$: Initial parameter vector
+\State $m_0 \leftarrow 0$ (initialisation du premier vecteur d'inertie)
+\State $v_0 \leftarrow 0$ (initialisation du second vecteur d'inertie)
+\State $t \leftarrow 0$ (initialisation du pas de temps)
+\While{$\theta_t$ not converged do}
+  \State $t \leftarrow t+1$
+  \State $g_t \leftarrow \nabla _\theta f_t(\theta _{t-1})$
+  \State $m_t \leftarrow \beta_1 m_{t-1} + (1-\beta_1) g_t$
+  \State $v_t \leftarrow \beta_2 v_{t-1} + (1-\beta_2) ^2$
+  \State $\^m_t \leftarrow m_{t}/(1- \beta_1^t)$
+  \State $\^v_t \leftarrow v_{t}/(1- \beta_2^t)$
+  \State $\theta_t \leftarrow \theta_{t-1} - \alpha \^m_t /(\sqrt{\^v_t}+\epsilon)$
+\EndWhile
+\RETURN \theta_t 
+\end{algorithmic}
+\end{algorithm}
+
+
+
+\bigskip
+
+Cet algorithme est efficace car il présente l'avantage de prendre en compte l'erreur sur le gradient en introduisant la notion d'"exponential moving average" : on fait une moyenne en se souvenant et en reprenant les gradients précédents avec le terme $m_i$ qui représente la moyenne des gradients sur les périodes précédentes.
+\bigskip
+
+L'algorithme d'Adagrad est identique à celui de Adam au détail près que $\beta_2=0$.
+
+\bigskip
+
+Il existe également une correction de l'agorithme d'Adam notée AMSgrad pour améliorer les propriétés de convergence de l'algorithme : $\Rightarrow$ dans $v^t$ on prendra cette fois le maximum des carrés des gradients précédents
+\bigskip
+
+\bigskip
+Il convient également de noter que cette méthode d'Adam présente également des limites et qu'il existe néanmoins certains cas convexe où l'algorithme ne converge pas vers la solution optimale.
+
+\bigskip
+
+\section{Notations}
+
+\bigskip
+
+Ici nous allons prendre F comme la fonction objectif dont on cherche un point critique. Elle n'a pas d'aléa. Nous allons optimiser la descente de gradient sur une fonction F de $R^d$ dans R. 
+
+\bigskip
+
+La fonction f représentera les erreurs liées à l'apprentissage. L'aléa est localisé sur les $f_i$ qui sont i.i.d. et correspondent à des réalisations indépendantes entre elles telles que entre elles telles que $E [ \nabla f(x)] = \nabla F(x)$ (on peut donc dire que $\nabla f(x)$ est un estimateur sans biais de $\nabla F(x)$)
+
+\bigskip
+
+La variable d'optimisation notée $x$ représentera le paramètre sur lequel on optimise (weight en anglais)
+
+\bigskip
+
+\section{Conditions requises pour la démonstration du théorème B.1}
+
+Le but ici sera de majorer l'espérance du gradient de F avec cette méthode par une quantité la plus petite possible. Cette quantité s'écrit sous la formme $c*\frac{1}{1-\beta_1}$ donc il faudra la minimiser en augmentant la dépendance en $\beta_1$, ie en ayant une borne de l'ordre $O(1-\beta_1)^{-n}$ avec la puissance la plus grande possible (-n doit etre plus grand, ici $=-1 >> -2$) car $\beta_1$ étant compris entre 0 et 1, $1-\beta_1$ l'est aussi et il faut que l'exposant au dénominateur soit alors le plus petit possible pour avoir une petite borne.
+
+\bigskip
+
+Nous allons devoir au cours de cette démonstration prendre en compte les conditions suivantes :
+
+\bigskip
+
+\newtheorem{assumption}{Condition}
+\begin{assumption}
+
+$\forall x \in \mathbb{R}^d$, $F(x)\geq F_* $ : F est borné par une borne inférieure $F_*$ \hspace{\fill} (B1) 
+
+\bigskip
+
+\end{assumption}
+
+\bigskip
+
+\begin{assumption}
+
+ $\forall x$ que l'on va rencontrer $\in \mathbb{R}^d$, $ \Vert \nabla F(x)  \Vert ^2_2 \leq R^2$ et $\mathbb{E}[ \Vert \nabla f(x) \Vert ^2_2]-  \Vert \nabla F(x)  \Vert ^2_2 \leq \sigma ^2$ \hspace{\fill}(B2) 
+
+$\Rightarrow \mathbb{E}[ \Vert \nabla f(x) \Vert ^2_2] \leq R^2+ \sigma^2 $
+\end{assumption}
+
+\bigskip
+
+ $\mathbb{E}[ \Vert \nabla f(x) \Vert ^2_2]-  \Vert \nabla F(x)  \Vert ^2_2 $ correspond exactement à la variance
+
+En effet
+ $\mathbb{E}[ \Vert \nabla f(x) \Vert ^2_2]-  \Vert \nabla F(x)  \Vert ^2_2 = \mathbb{E}[ \Vert \nabla f(x) \Vert ^2_2]-  \Vert \mathbb{E}[\nabla f(x)]  \Vert ^2_2= Var(\nabla f(x))$ 
+ 
+ donc cette condition borne la variance du gradient de f et son espérance
+  
+\bigskip
+
+
+\bigskip
+
+\begin{assumption}
+
+ $\forall x,y \in \mathbb{R}^d$, $  \Vert  \nabla F(x) - \nabla F(y) \Vert _2 \leq L  \Vert x-y \Vert _2$ \hspace{\fill} (B3) 
+\bigskip
+
+On suppose la fonction F est L smooth, ie qu'elle est continûment différentiable et que son gradient est L-Lipschitz, donc que F est à gradient L-Lipschitz et différentiable par rapport à la norme $l_2$
+
+\bigskip
+
+
+\end{assumption}
+
+\bigskip
+
+(De plus d'après la section "Notation", on a également que $\mathbb{E}[\nabla f(x)]= \nabla F(x)$)
+
+\bigskip
+
+Notre but au cours de cette démonstration sera de majorer l'espérance du gradient de notre fonction objectif afin de montrer que notre méthode convergera bien vers le point critique que l'on cherche, avec un majorant le plus petit possible.
+
+\bigskip
+
+On considère un indice tau $\tau$ aléatoire tel que la probabilité de $\tau= j$ est proportionnel à $1-\beta^{N-j}$ avec N le nombre d'itérations : $\mathbb{P}(\tau = j) \propto 1- \beta^{N-j}$. \hspace{\fill}(B5)
+
+L'indice de $x$, pour tout $x$ (souvent le poids d'un modèle linéaire ou de deep learning) est tiré aléatoirement. On s'arrête à l'itération N et après on tire un indice.
+\bigskip
+
+Nous allons essayer de démontrer cela, tout d'abord dans le cas du SGD sans inertie en posant $\beta_1=0$ puis dans le cas du SGD avec inertie :
+
+\bigskip
+
+\section{Cas du SGD sans inertie}
+
+
+Dans cette section nous prenons le cas simple $\beta_1=0$ dans \eqref{eq:equation1}. Dans ce cas là les preuves sont plus simples et permettent une première compréhension de la preuve générale.
+
+Dans cette section nous montrerons le théorème de convergence suivant :
+
+\begin{prop}[Convergence du SGD sans inertie]
+\label{prop:conv_sans_inertie}
+
+Soit $\alpha>0$ et $(x_n)_n$ une suite d'itérés suivant l'algorithme du SGD sans inertie, c'est-à- dire que \eqref{eq:equation1}, page \pageref{eq:equation1} devient :
+\begin{equation}
+    x_n=x_{n-1}-\alpha g_n  \quad \text{si  } \quad g_n= \nabla f_n(x_{n-1})
+\end{equation}
+Soit $N$ le nombre total d'itérations, et soit $\tau$ un indice aléatoire tiré selon une loi uniforme sur $[1,N]$, c'est-à-dire : $$\mathbb{P}(\tau = j) = \frac{1}{N}, $$
+alors 
+\begin{eqnarray*}
+\mathbb{E}\left[ \Vert \nabla F(x_\tau) \Vert ^2_2\right] \leq \frac{1}{\alpha N} (F(x_0)-F_*) + \frac{\alpha L (R^2+ \sigma^2)}{2} 
+\end{eqnarray*}
+\hspace{\fill}(B6-simplifié) 
+\end{prop}
+
+
+
+\bigskip
+
+Avant de démontrer la proposition 1, on montre dans un premier temps comment  retrouver à partir de cette inégalité sur $ \Vert \nabla F(x_\tau) \Vert ^2_2$ une majoration de la forme $O(1) $, c'est à dire de l'ordre d'une constante à partir du paramètre $\alpha$.
+
+\bigskip
+
+On commence pour cela par poser $G_n= \nabla F_n(x_{n-1})$ et considérer les conditions énoncées dans la section 3.
+
+ \bigskip
+
+ Posons $\alpha=\frac{C}{\sqrt{N}}$ pour équilibrer les deux termes du majorant, avec C une constante multiplicative positive quelconque
+
+\newline
+
+En faisant cela, on obtient alors bien un majorant de l'ordre $O(1)$
+
+ \begin{eqnarray*}
+\mathbb{E}[ \Vert \nabla F(x_\tau) \Vert ^2_2] \leq \underbrace{\frac{1}{C\sqrt{N}} (F(x_0)-F_*) + \frac{C L (R^2+ \sigma^2)}{2 \sqrt{N}}}_{C' \sim O(1)}
+\end{eqnarray*}
+
+\bigskip 
+
+On pose $G_n=\nabla F(x_{n-1})$ et $g_n=f(x_{n-1})$
+
+\bigskip
+
+On va essayer de majorer l'espérance $\mathbb{E}[ \Vert m_n \Vert ^2_2]$
+
+\bigskip
+
+Or $\mathbb{E}[ \Vert m_n \Vert ^2_2]=\mathbb{E}[ \Vert \nabla f_n \Vert ^2_2] \leq R^2+ \sigma^2$ d'après l'hypothèse B.2.
+
+\bigskip
+
+
+
+\begin{lemma}[Lemme B.2 de \cite{defossez2022a}]
+Soit $\alpha \in ]0;1[$, $i \in \mathbb{N}$ et $Q\in \mathbb{N}$ tel que $Q\geq i$ on a
+\begin{equation}
+A_i=\sum_{q=i}^{Q} a^q q \leq \frac{a}{(1-a)^2}
+\end{equation}
+\end{lemma}
+
+
+\bigskip
+
+La démonstration est identique à ce qu'on verra dans le cas du SGD avec inertie.
+
+\bigskip
+
+\begin{lemma}[Lemme B.3 de \cite{defossez2022a}]: Pour $\alpha>0$, avec les conditions décrites précedemment, le lemme B.3 nous donne la minoration suivante :
+\[
+\mathbb{E}[\nabla F(x_{n-1})^T m_n]=\mathbb{E}[G_n^T m_n] \geq \mathbb{E}[ \Vert G_n \Vert ^2_2] \]
+\end{lemma}
+
+\bigskip
+
+Par définition dans le cas $\beta_1=0$: $G_n^T m_n=G_n^T g_n \geq G_n^T g_n$ (inégalité triviale)
+\
+\bigskip
+
+En prenant l'espérance, en appliquant la même simplification que pour la partie du SGD avec inertie ("Tower Property"), page 13, on obtient alors:
+
+\begin{eqnarray*}
+\mathbb{E}[G_n^T m_n]
+&=&\mathbb{E}[\nabla F(x_{n-1})^T \nabla f(x_{n-1})]\\
+&=& \mathbb{E}[\mathbb{E}_{n-1}[\nabla F(x_{n-1})^T \nabla f_{n}(x_{n-1})]]\\
+&=&\mathbb{E}[\nabla F(x_{n-1})^T \nabla F(x_{n-1})]\\
+&=& \mathbb{E}[ \Vert G_n^T \Vert ]\\ 
+&\geq& \mathbb{E}[ \Vert G_n^T \Vert ] = \mathbb{E}[ \Vert \nabla F(x_{n-1}) \Vert ^2_2]   
+\end{eqnarray*}
+
+Ceci conclue la preuve du Lemme.
+
+\newtheorem*{theo45}{Preuve du théorème B.1}
+
+\begin{theo45} :
+
+\end{theo45}
+
+Nous allons finir par prouver $\mathbb{E}[ \Vert \nabla F(x_\tau) \Vert ^2_2] \leq \frac{1}{\alpha N} (F(x_0)-F_*) + \frac{\alpha L (R^2+ \sigma^2)}{2}$
+
+\bigskip
+
+Comme F est L-smooth, en appliquant B.3 avec pour paramètres $x=x_n$ et $y=x_{n-1}$, 
+
+On a $ x_n-x_{n-1}  = - \alpha m_n$ d'après le schéma de la SGD numéro \ref{eq:equation1}, page \pageref{eq:equation1}, et on obtient :
+
+\begin{eqnarray*}
+    \Vert  \nabla F(x_n) - \nabla F(x_{n-1}) \Vert _2 &\leq& L  \Vert x_n-x_{n-1} \Vert _2 \\
+    \Vert  \nabla F(x_n) - \nabla F(x_{n-1}) \Vert _2 &\leq& L  \Vert \alpha m_n \Vert _2 \hspace{10} \textrm{Avec $m_n= \beta_1 m_{n-1} + \nabla f_n(x_{n-1}))$} \\ 
+\end{eqnarray*}
+
+Mais il est même possible d'aller plus loin. En effet, F étant différentiable à gradient L-Lipschitz, elle vérifie la propriété suivante \footnote{Plus de détails dans le Lemme 2.13 du cours de M.Weiss en Bibliographie } : 
+\begin{eqnarray*}
+    F(x_n) &\leq& F(x_{n-1})+\nabla F(x_{n-1})^T (x_n-x_{n-1}) + \frac{L}{2}  \Vert x_n-x_{n-1} \Vert ^2_2\\ 
+    F(x_n) &\leq& F(x_{n-1})- \alpha G_n^T m_n + \frac{L}{2}  \Vert \alpha m_n \Vert ^2_2\\ 
+    F(x_n) &\leq& F(x_{n-1})- \alpha G_n^T m_n + \frac{\alpha^2 L}{2}  \Vert m_n \Vert ^2_2\\
+    
+\end{eqnarray*}
+
+\bigskip
+
+Ensuite, en passant à l'espérance sur cette inégalité ceci donne 
+
+\begin{eqnarray*}
+    \mathbb{E}[F(x_n)] &\leq& \mathbb{E}[F(x_{n-1})]- \alpha \mathbb{E}[G_n^T g_n]  + \frac{\alpha^2 L}{2} \mathbb{E}[ \Vert g_n \Vert ^2_2]\\
+   &\leq& \mathbb{E}[F(x_{n-1})]- \alpha \underbrace{\mathbb{E}[ \Vert G_n \Vert ]}_{\mathbb{E}[G_n^T m_n] \geq \mathbb{E}[ \Vert G_n^T \Vert ^2_2]} + \frac{\alpha^2 L}{2} \underbrace{(R^2+\sigma^2)}_{ \geq \mathbb{E}[ \Vert g_n \Vert ^2_2]}
+\end{eqnarray*}
+
+On isole le terme en $\alpha$ de l'autre côté de l'inégalité et on somme sur $n\in \{1,...,N\}$.
+
+\bigskip
+
+Il ne restera de $\mathbb{E}[F(x_{n-1})]-\mathbb{E}[F(x_{n})]$ que le dernier terme et le premier terme que la somme sur N n'annulera pas, ie $\mathbb{E}[F(x_{0})]-\mathbb{E}[F(x_N)]$ ce qui donne encore $F(x_0)-\mathbb{E}[F(x_{N})}]$ ($x_0$ étant le premier terme, son espérance est une somme du seul terme $x_0$ et vaut donc $x_0$).
+
+\bigskip
+
+Le dernier terme, quant à lui, ne dépendant pas de n, sera sommé N fois et donc multiplié par un facteur N en passant à la somme. Cela donne donc :
+
+\begin{eqnarray*}
+    \alpha \sum_{n=1}^{N} \mathbb{E}[ \Vert G_n \Vert ^2_2] \leq F(x_0)-\mathbb{E}[F(x_N)]+ N \frac{\alpha^2 L}{2} (R^2+\sigma^2)
+\end{eqnarray*}
+
+\bigskip
+
+Si l'on pose $A=\alpha \sum_{n=1}^{N} \mathbb{E}[ \Vert G_n \Vert ^2_2]$:
+
+\bigskip
+
+\begin{eqnarray*}
+    A &=& \alpha  \sum_{n=1}^{N} \mathbb{E}[ \Vert G_n \Vert ^2_2]\\
+    &=&\alpha  \sum_{n=1}^{N} \mathbb{E}[ \Vert \nabla F(x_{n-1} \Vert ^2_2]\\
+    &=& N \alpha \underbrace{ \frac{1}{N}\sum_{n=0}^{N} \mathbb{E}[ \Vert \nabla F(x_{n-1}) \Vert ^2_2]}_{\mathbb{E}[ \Vert \nabla F(x_\tau) \Vert ]}\\
+    &=& N \alpha \mathbb{E}[ \Vert \nabla F(x_\tau) \Vert ]
+\end{eqnarray*}
+
+\bigskip
+
+\bigskip
+
+
+On reconnait la distribution uniforme donnée pour $\tau$ par B5
+
+\bigskip
+
+En reprenant l'inégalite précedente (B23) en remplaçant A par sa nouvelle expression, nous obtenons enfin la majoration souhaitée pour l'espérance du gradient de notre fonction objectif F : 
+
+\begin{eqnarray*}
+    A &\leq& F(x_0)-\mathbb{E}[F(x_N)]+ N \frac{\alpha^2 L}{2} (R^2+\sigma^2)\\
+    N \alpha \mathbb{E}[ \Vert \nabla F(x_\tau) \Vert  &\leq& F(x_0)-\mathbb{E}[F(x_N)]+ N \frac{\alpha^2 L}{2} (R^2+\sigma^2)\\
+    \mathbb{E}[ \Vert \nabla F(x_\tau) \Vert  &\leq& \frac{F(x_0)-\mathbb{E}[F(x_N)]}{N\alpha}+ \frac{\alpha L}{2} (R^2+\sigma^2)\\
+    \mathbb{E}[ \Vert \nabla F(x_\tau) \Vert  &\leq& \frac{F(x_0)-F_*}{N\alpha}+ \frac{\alpha L}{2} (R^2+\sigma^2)\\ 
+    &&\\
+    &&\textrm{car d'après B.1, F admet une borne inférieur $F_*$}
+\end{eqnarray*}
+
+Donc nécessairement $F(x_N) \geq F_*$ et l'espérance sommant les termes, $\mathbb{E}[F(x_N)] \geq F_*$
+
+\section{Cas du SGD avec inertie}
+
+\bigskip
+
+Nous allons nous intéresser dans cette partie aux itérations de la méthode de descente de gradients stochastique avec inertie, qui, pour un pas $\alpha$ et pour une itération n compris entre 1 et N (nombre total d'itérations), s'écrit de la manière suivante :
+
+\bigskip
+
+\begin{eqnarray*}
+\left \{
+\begin{array}{lcl} 
+m_n= \beta_1 m_{n-1} +\nabla f_n(x_{n-1}) \\ 
+x_n=x_{n-1}-\alpha m_n  
+\end{array}
+ \hspace{1cm} \tag{(1)} \label{eq:equation1} 
+\right
+\end{eqnarray*}
+
+
+\bigskip
+
+La démonstration du théorème B1 interviendra à la fin. Essayons d'abord de trouver l'ordre que cette majoration représente et la vitesse de convergence qu'on peut lui associer (par rapport au paramètre $\beta_1$).
+
+\bigskip
+
+\newtheorem*{theoreme3}{Théorème B1 }
+
+\begin{theoreme3}(Convergence du SGD avec inertie) :
+
+\bigskip
+
+En supposant les hypothèses précédentes et en prenant $\tau$ défini comme précédemment, nous avons que pour un nombre total N d'itérations avec $N>\frac{1}{1-\beta_1}, x_0 \in \mathbb{R}^d, \alpha >0, \beta_1 \in ]0;1]$ , les $(x_n)_{n \in \mathbb{N}*$ vérifient : 
+
+
+\begin{eqnarray*}
+\mathbb{E}[ \Vert \nabla F(x_\tau) \Vert ^2_2] \leq \frac{1- \beta_1}{\alpha \tilde{N}} (F(x_0)-F_*) + \frac{N}{\tilde{N}} \frac{\alpha L (1+ \beta_1) (R^2+ \sigma^2)}{2(1- \beta_1)^2} 
+\end{eqnarray*} \hspace{\fill}(B6) 
+
+avec $\tilde{N}=N-\frac{\beta_1}{1-\beta_1}$
+
+\end{theoreme3}
+
+
+
+\subsection{Analyse de la vitesse de convergence}
+
+Partons de l'expression ci-dessus et essayons de retrouver une majoration de la forme $O(1-\beta_1)^{-1} $ pour améliorer la majoration de l'ordre de $O(1-\beta_1)^{-2}$ précédemment trouvée dans la démonstration de l'article de Tianbao Yang (2016). 
+
+\bigskip
+
+
+\bigskip
+
+Il est logique de penser que N représentant le nombre d'itérations il sera très grand et bien plus grand que $\frac{1}{1-\beta_1}$ avec $\beta_1$ compris entre 0 et 1, or on a posé $\tilde{N}=N-\frac{\beta_1}{1-\beta_1}$
+
+\bigskip
+
+Donc nous aurons $N>>\frac{\beta_1}{1-\beta_1}$ et ainsi N et $\tilde{N}$ seront presque égaux et on aura $N \sim \tilde{N} $.
+
+\bigskip
+
+Ce qui donne alors : 
+\begin{eqnarray*}
+    \mathbb{E}[ \Vert \nabla F(x_\tau) \Vert ^2_2] \leq \frac{1- \beta_1}{\alpha N} (F(x_0)-F_*) + \frac{\alpha L (1+ \beta_1) (R^2+ \sigma^2)}{2(1- \beta_1)^2}
+\end{eqnarray*} \hspace{\fill}(B7) 
+
+\bigskip
+
+On veut minimiser la quantité qui majore l'espérance du gradient. Pour cela on essaie d'isoler les constantes et de proposer une réécriture de $\alpha$ :
+
+\bigskip
+
+On remarque que l'écriture du majorant peut s'exprimer sous la forme $C_1 \frac{1-\beta_1}{\alpha N}+C_2 \frac{\alpha}{ (1- \beta_1)}$ 
+
+\bigskip
+
+Sur un des deux termes il faudrait augmenter $\alpha$ et sur l'autre le diminuer pour réduire le majorant. Et pour déterminer comment poser $\alpha$ pour minimiser cela, on pose alors $\alpha$ de sorte à égaliser les deux termes pour équilibrer : i.e. tel que $ \frac{1-\beta_1}{\alpha N}=\frac{\alpha}{ (1- \beta_1)}$ 
+
+\bigskip
+
+Finalement, en prenant n'importe quelle constante multiplicative positive C près, on fixe alors $\alpha$ de la forme $\alpha=\frac{(1-\beta_1) C}{\sqrt{N}}$. \hspace{\fill}(B8)   
+
+\bigskip
+
+$\alpha$ représente le pas de la méthode (noté également learning rate) et dépend au vu de son expression du nombre total d'itérations N. (au lieu d'avoir un pas fixe, on pourrait également avoir un pas variable $\alpha_k$ qui serait différent à chaque itération, cf algorithme de Robbins-Monroe)
+
+
+\bigskip
+
+En remplaçant cela dans l'équation on obtient : 
+\begin{eqnarray*}
+    \mathbb{E}[ \Vert \nabla F(x_\tau) \Vert ^2_2] \leq \frac{1}{C \sqrt{N}} (F(x_0)-F_*) + \frac{C }{\sqrt{N}} \frac{ L (1+ \beta_1) (R^2+ \sigma^2)}{2(1- \beta_1)^2} 
+\end{eqnarray*} \hspace{\fill}(B9) 
+
+
+\bigskip
+
+On obtient bien une expression de l'ordre de $O((1-\beta_1)^{-1})$
+
+\bigskip
+
+L'article de recherche de Yang (2016) trouve une majoration dépendante de $\beta_1$ de l'ordre de $O((1-\beta_1)^{-2})$, donc la borne que nous avons trouvé est meilleure. \hspace{\fill}(B10) 
+
+\bigskip
+
+\subsection{Preuve de l'encadrement}
+
+Considérons pour la suite le lemme suivant, qui permettra de simplifier certains calculs de somme :
+
+\bigskip
+
+\newtheorem{theo56}{Lemme}
+\begin{theo56}
+
+Soit $(u_k)_{k \in \mathbb{N}}$, une suite géométrique de raison $q$ et de premier terme $u_0$ :
+
+\bigskip
+
+Alors, si $0<q<1$ et $0<u_0<1$,  la somme des $n-1$ premiers termes vaut 
+\begin{equation}
+    \sum\limits_{\substack {k=0}}^{n-1} u_k = \frac{1-q^{n-1}}{1-q} \leq \frac{1}{1-q}
+\end{equation}
+
+
+\bigskip
+
+De plus, la suite $(u_k)_{k \in \mathbb{N}}$ vérifie la formule 
+\begin{equation}
+    \sum\limits_{\substack {k=n_{min}}}^{n_{max}} u_k = \frac{u_n_{min} - u_{n_{max}} * q}{1-q}
+\end{equation}
+
+
+\end{theo56}
+
+
+\bigskip
+
+\begin{preuve} 
+La preuve est laissée au lecteur
+\end{preuve}
+
+
+\bigskip
+
+Rappelons que pour simplifier la suite de nos calculs, on pose $G_n=\nabla F(x_{n-1})$ et $g_n=f(x_{n-1})$
+
+\bigskip
+
+
+\begin{itemize}[label=$\diamond$]
+   \item On va essayer de majorer l'espérance $\mathbb{E}[ \Vert m_n \Vert ^2_2]$
+\end{itemize}
+\bigskip
+
+D'après B4, on a  :
+\begin{equation*}
+    m_n= \beta_1 m_{n-1}+\nabla f_n(x_{n-1})= \nabla f_n(x_{n-1})+ \beta_1 (\nabla f_n(x_{n-2})+ \beta_1 m_{n-2})=...= \sum\limits_{\substack {k=0}}^{n-1} \beta_1^k \nabla f_{n-k} 
+\end{equation*}
+
+\bigskip
+
+
+D'où $\mathbb{E}[ \Vert m_n \Vert ^2_2]=\mathbb{E}[ \Vert \sum\limits_{\substack {k=0}}^{n-1} \beta_1^k \nabla f_{n-k} \Vert ^2_2]=\mathbb{E}[ \Vert \sum\limits_{\substack {k=0}}^{n-1} \beta_1^k g_{n-k} \Vert ^2_2]$
+
+\bigskip
+
+On essaie de majorer cette espérance en utilisant l'inégalité de Jensen. Cette inégalité suppose que pour une fonction f convexe et pour des $\theta_i$ respectant la propriété $\sum\limits_{i=1}^{n} \theta_i=1$, on a : 
+
+\begin{equation*}
+    \fbox{f(\sum\limits_{i=1}^{n} \theta_i x_i )\leq \sum\limits_{i=1}^{n} \theta_i f(x_i)}
+\end{equation*}
+
+\bigskip
+
+Ici dans notre cas f représente l'application qui applique la norme 2 au carré et on aura bien la propriété de la convexité puisqu'il s'agit de la norme 2 et que pour tout $p>1$, l'application $ \Vert . \Vert ^p$ est strictement convexe. 
+
+\bigskip
+
+Et dans notre cas également, comme on n'a pas de moyen vérifier $\sum\limits_{\substack {k=1}}^{n}  \beta_k=1 $
+
+Alors on va prendre $\theta_k$ tel que $\theta_k=\frac{\beta_1^k}{\sum_{p=0}^{n-1} \beta_1^p}$
+
+Et comme $\sum\limits_{\substack {p=0}}^{n-1} \beta_1^p$ a un indice p qui ne dépend pas de k on peut alors bien vérifier
+
+$\sum\limits_{k=0}^{n-1} \theta_k= \sum_{k=0}^{n-1} \frac{\beta_1^k}{\sum_{p=0}^{n-1} \beta_1^p}= \frac{\sum_{k=0}^{n-1} \beta_1^k}{\sum_{p=0}^{n-1} \beta_1^p}=1 $
+
+\bigskip
+
+Finalement en appliquant Jensen avec ces paramètres on a l'inégalité suivante :
+
+\bigskip
+
+\begin{equation*}
+ \left \Vert \sum\limits_{k=0}^{n-1} \theta_k g_{n-k} \right \Vert ^2_2 &\leq&  \sum\limits_{k=0}^{n-1} \theta_k  \Vert g_{n-k} \Vert _2^2  \hspace{1cm} \textrm{ avec } \sum\limits_{k=0}^{n-1} \theta_k=1$\\
+\end{equation*}
+ie 
+\begin{equation*}
+    \left \Vert \frac{\sum\limits_{k=0}^{n-1} \beta^k}{\sum\limits_{p=0}^{n-1} \beta_1^p} g_{n-k} \right \Vert ^2_2 &\leq& \frac{\sum\limits_{k=0}^{n-1} \beta^k  \Vert g_{n-k} \Vert _2^2  }{\sum\limits_{p=0}^{n-1} \beta_1^p} 
+\end{equation*}
+
+\bigskip
+
+
+\bigskip
+
+Et comme on va avoir un facteur $\frac{1}{(\sum_{p=0}^{n-1} \beta_1^p)^2}>0$ des deux côtés de l'inégalité, on peut réécrire cela avec les $\beta_1^k$ de la forme suivante (en rajoutant l'espérance sur la fonction qu'on prend pour appliquer Jensen):
+
+\bigskip
+
+$\mathbb{E}[\Vert m_n \Vert _2^2]=\mathbb{E}[ \Vert \sum\limits_{\substack {k=0}}^{n-1} \beta_1^k g_{n-k} \Vert ^2_2] \leq (\sum\limits_{\substack {k=0}}^{n-1} \beta_1^k )(\sum\limits_{\substack {k=0}}^{n-1} \beta_1^k \mathbb{E}[ \Vert g_{n-k} \Vert _2^2] ) $
+
+\bigskip
+
+$\leq \frac{1}{1-\beta_1} \sum\limits_{\substack {k=0}}^{n-1} \beta_1^k (R^2 + \sigma^2) $ \hspace{5} 
+
+car d'après B2, on sait que $\mathbb{E}[ \Vert g_{n-k} \Vert _2^2] \leq R^2+ \sigma^2$ et car le premier terme étant la somme des termes d'une suite géométrique de raison $\beta_1$, elle vaut $\sum\limits_{\substack {k=0}}^{n-1} \beta_1^k = \frac{1-\beta_1^{n-1}}{1-\beta_1} \leq \frac{1}{1-\beta_1}$
+
+\bigskip
+
+Ainsi $\mathbb{E}[\Vert m_n \Vert _2^2] \leq \frac{R^2+\sigma^2}{(1-\beta_1)^2}$ \hspace{\fill}(B11) 
+
+\bigskip
+
+Ce qui nous donne cette inégalité pour la même raison : $\sum\limits_{\substack {k=0}}^{n-1} \beta_1^k \leq \frac{1}{1-\beta_1}$ (suite géométrique)
+
+\bigskip
+
+\begin{lemma}[Lemme B.2 de \cite{defossez2022a}]
+
+\bigskip
+
+Soit $\alpha \in ]0;1[$, $i \in \mathbb{N}$ et $Q\in \mathbb{N}$ tel que $Q\geq i$ on a
+
+\bigskip
+
+$A_i=\sum\limits_{\substack {q=i}}^{Q} a^q q \leq \frac{a}{(1-a)^2}$
+\end{lemma}
+
+\bigskip
+
+\bigskip
+
+\underline{Preuve du lemme:} On va démontrer l'inégalité de ce lemme $A_i=\sum\limits_{\substack {q=i}}^{Q} a^q q \leq \frac{a}{(1-a)^2}$
+
+\bigskip
+
+En posant $A_i=\sum_{q=i}^{Q} a^q q$, on part de l'expression de $A_i-a A_i$
+
+\bigskip
+
+On peut arriver à la ligne suivante par changement d'indice. Comme  $A_i=\sum\limits_{\substack {q=i}}^{Q} a^q q$ alors  $aA_i=\sum\limits_{\substack {q=i}}^{Q} a^{q+1} q$ et ainsi on voit aisément que $aA_i$ va avoir son dernier terme contenant du $A^{Q+1}$ non annulé par $A_i$ tandis que $A_i$ aura un premier terme contenant $a^i$ qui ne sera pas annulé par $aA_i$
+
+\bigskip
+
+Ainsi $A_i-a A_i= a^i i -a^{Q+1}Q + \sum\limits_{\substack {q=i+1}}^{Q} a^q q- a^{q+1} q$ 
+
+\bigskip
+
+Et on voit bien par changement d'indice pour le terme restant sous forme de somme (ou tout simplement en regardant terme à terme la soustraction) que le terme suivant annule le terme précedent en $q+1$ à un coefficient $a^i$ près ($a^{q+1} (q+1) - a^{q+1} q=a^{q+1}$ pour les termes intermédiaires)
+
+\bigskip
+
+On peut ensuite factoriser le terme de gauche de l'égalité par $A_i$ et simplifier le dernier terme de droite en appliquant la formule alternative pour une suite géométrique de raison a : (voir Lemme 1 de la section)
+
+\begin{eqnarray*}
+    (1-a)A_i = a^i i - a^{Q+1}Q +  \frac{a^{i+1} - a^{Q+1}}{1-a}
+\end{eqnarray*}
+
+
+\bigskip
+
+Finalement, en divisant par (1-a) et en factorisant par $a^i$ on obtient bien 
+\begin{eqnarray*}
+    A_i=\sum\limits_{\substack {q=i}}^{Q} a^q q &=& \frac{a^i}{1-a}(i-a^{Q+1} Q + \frac{a-A^{Q+1-i}}{1-a}) \\
+    &\leq& \frac{a}{(1-a)^2}
+\end{eqnarray*}\hspace{\fill}(B12) 
+
+Avec la majoration que l'on obtient en faisant tendre Q vers l'infini et avec i=0
+
+\bigskip
+
+\begin{itemize}[label=$\diamond$]
+   \item Montrons à présent que $\mathbb{E}[\nabla F(x_{n-1})^T m_n]\geq \sum\limits_{\substack {k=0}}^{n-1} 
+\beta_1^k \mathbb{E}[ \Vert \nabla F(x_{n-k-1}) \Vert ^2_2] - \frac{\alpha L \beta_1 (R^2+\sigma ^2)}{(1-\beta_1)^3} $  \hspace{\fill}(B13) 
+\end{itemize}
+
+
+\bigskip
+
+On remarque tout d'abord que $\nabla F(x_{n-1})^T m_n=G^T_n m_n$ par notation.
+
+\bigskip
+
+Partons de $G^T_n m_n$:
+
+Comme $ m_n= \sum\limits_{\substack {k=0}}^{n-1} \beta_1^k \nabla f_{n-k}$,
+on a $G^T_n m_n =  \sum\limits_{\substack {k=0}}^{n-1} \beta_1^k G_n^T g_{n-k}$
+
+\bigskip
+
+En faisant "$+ G_{n-k}^T - G_{n-k}^T$" ie "$+\nabla F(x_{n-k-1})^T -\nabla F(x_{n-k-1})^T$" on peut décomposer la somme en deux termes
+
+\bigskip
+
+\begin{eqnarray*}
+G^T_n m_n&=& \sum_{k=0}^{n-1} \beta_1^k G_n^T g_{n-k}\\
+&=& \sum_{k=0}^{n-1} \beta_1^k ( \left G_n^T + G_{n-k}^T -G_{n-k}^T \right ) g_{n-k} \\
+&=&\sum_{k=0}^{n-1} \beta_1^k G_{n-k}^T g_{n-k}+ \sum_{k=0}^{n-1} \beta_1^k (G_n- G_{n-k})^T g_{n-k}\\ 
+&=&  \sum_{k=0}^{n-1} \beta_1^k G_{n-k}^T g_{n-k}+ \sum_{k=1}^{n-1} \beta_1^k (G_n- G_{n-k})^T g_{n-k}$ \hspace{10} car la deuxième somme vaut 0 pour k=0\\ 
+\end{eqnarray*} \hspace{\fill}(B14) 
+
+\bigskip
+
+On aura donc fait apparaitre les termes des gradients précédents : $G_{n-k}$
+
+\bigskip
+
+De plus d'après B.3, la fonction F est L-smooth et donc continûment différentiable et son gradient est L Lipchitz :
+
+\bigskip
+
+En appliquant B.3 on a $\forall x,y \in \mathbb{R}^d$, $  \Vert  \nabla F(x) - \nabla F(y) \Vert _2 \leq L  \Vert x-y \Vert _2$ 
+
+ie en mettant au carré avec $x=x_{n-1}$ et $y=x_{n-k-1} $ ici on obtient alors  $  \Vert  G_n - G_{n-k} \Vert ^2_2 \leq L^2  \Vert x_{n-1}-x_{n-k-1} \Vert ^2_2$ (inégalité B15)
+
+\bigskip
+
+Or d'après l'écriture du SGD avec inertie (B4), on a $x_n=x_{n-1}- \alpha m_n$ ie $x_n-x_{n-1}=- \alpha m_n$ 
+
+et par conséquent $|x_{n-1}-x_{n-k-1}|$ correspond à k fois cette opération sur les $m_i$ 
+
+ce qui donne $|x_{n-1}-x_{n-k-1}| = \sum_{l=1}^{k} - \alpha m_{n-l}$ et finalement $L^2  \Vert x_{n-1}-x_{n-k-1} \Vert ^2_2= L^2  \Vert \sum\limits_{\substack {l=1}}^{k}  \alpha m_{n-l} \Vert ^2$
+
+
+\bigskip
+
+Si on applique à nouveau l'inégalité de Jensen avec l'application qui applique la norme 2 au carré comme précédemment $ \Vert . \Vert $ mais avec $\alpha$ (=learning rate) à la place de $\beta_1^k$, on obtient alors :
+\begin{eqnarray*}
+     \Vert  G_n - G_{n-k} \Vert ^2_2 &\leq& L^2  \Vert \sum\limits_{\substack {l=1}}^{k}  \alpha m_{n-l} \Vert ^2 \leq L^2 \left ( \sum\limits_{\substack {l=1}}^{k}  \alpha \right) \sum\limits_{\substack {l=1}}^{k}  \alpha \Vert  m_{n-l} \Vert _2^2 \\
+    \text{D'où } \Vert  G_n - G_{n-k} \Vert ^2_2 &\leq&  \alpha ^2 L^2 k \sum\limits_{\substack {l=1}}^{k}  \Vert m_{n-l} \Vert _2^2
+\end{eqnarray*} \hspace{\fill}(B15) 
+
+\bigskip
+
+Pour trouver une inégalité sur les $G_n^T m_n$, on va se servir de l'inégalité $\forall \lambda>0, \hspace{5} x,y \in \mathbb{R}, \hspace{5}  | x^Ty | \leq \frac{\lambda}{2}  \Vert x \Vert ^2_2 + \frac{ \Vert y \Vert _2^2}{2 \lambda}$ en posant $x=G_n-G_{n-k}$, $y=g_{n-k}$ et $\lambda=\frac{1-\beta_1}{k \alpha L}$  \hspace{\fill}(B16) 
+
+\bigskip
+
+\underline{Preuve de l'inégalité :} On peut poser cette inégalité a partir de l'inégalité de Cauchy Schwartz de la manière suivante:
+
+\bigskip
+
+\begin{eqnarray*}
+    |x^T y | &=& | (x \sqrt{\lambda})^T( \frac{y}{\sqrt{\lambda}})| \\
+    &\leq& \Vert x \sqrt{\lambda} \Vert \Vert \frac{y}{\sqrt{\lambda} } \Vert \\
+    &\leq& \frac{1}{2} \left ( \Vert x \sqrt{\lambda}  \Vert^2  + \Vert \frac{y}{\sqrt{\lambda} } \Vert^2 \right ) \textrm{ Puisque $ab \leq \frac{1}{2} (a^2+b^2) \quad  \forall a,b \in \mathbb{R}$} \\
+    &\leq& \frac{1}{2} \left ( \lambda \Vert x  \Vert^2  +  \frac{\Vert y \Vert^2}{\lambda }  \right ) \\
+    &\leq& \frac{\lambda}{2}  \Vert x \Vert ^2_2 + \frac{ \Vert y \Vert _2^2}{2 \lambda}
+\end{eqnarray*}
+
+
+
+
+\bigskip
+
+En appliquant l'inégalité, on obtient :
+\begin{eqnarray*}
+     |(G_n-G_{n-k})^T g_{n-k} | \leq \frac{1-\beta_1}{2 k \alpha L}  \Vert (G_n-G_{n-k}) \Vert _2^2+  \Vert g_{n-k}  \Vert _2^2 \frac{k \alpha L}{2 (1-\beta_1)}
+\end{eqnarray*}
+
+\bigskip
+
+Rappelons l'égalité obtenue à la fin de la page 10 : $G^T_n m_n= \sum\limits_{\substack {k=0}}^{n-1} \beta_1^k G_{n-k}^T g_{n-k}+ \sum\limits_{\substack {k=1}}^{n-1} \beta_1^k (G_n- G_{n-k})^T g_{n-k}$
+
+
+\bigskip
+
+L'inégalité sur $ | (G_n-G_{n-k})^T g_{n-k} |$ nous permet d'obtenir une majoration du deuxième terme.
+
+\bigskip
+
+
+\bigskip
+
+Ainsi
+
+\begin{eqnarray*}
+$G^T_n m_n &=& \sum_{k=0}^{n-1} \beta_1^k G_{n-k}^T g_{n-k}+ \sum_{k=1}^{n-1} \beta_1^k   (G_n- G_{n-k})^T g_{n-k}  \\
+&\geq& \sum_{k=0}^{n-1} \beta_1^k G_{n-k}^T g_{n-k}- \sum_{k=1}^{n-1} \beta_1^k  | (G_n- G_{n-k})^T g_{n-k}  | \\
+&\geq& \sum_{k=0}^{n-1} \beta_1^k G_{n-k}^T g_{n-k}-\sum_{k=1}^{n-1} \beta_1^k \left (  \frac{1-\beta_1}{2 k \alpha L}  \Vert (G_n-G_{n-k}) \Vert _2^2+  \Vert g_{n-k}  \Vert _2^2 \frac{k \alpha L}{2 (1-\beta_1)} \right )  \\
+&&\textrm{En injectant B15 pour remplacer $ \Vert (G_n- G_{n-k}) \Vert _2$}\\
+  &\geq& \sum_{k=0}^{n-1} \beta_1^k G_{n-k}^T g_{n-k}- \sum_{k=1}^{n-1} \frac{\beta_1^k}{2} \left ( \frac{1-\beta_1}{ k \alpha L} (\alpha ^2 L^2 k \sum_{l=1}^{k}  \Vert m_{n-l} \Vert _2^2)+  \Vert g_{n-k}  \Vert _2^2 \frac{\alpha L k}{ (1-\beta_1)} \right ) \\
+  &\geq& \sum_{k=0}^{n-1} \beta_1^k G_{n-k}^T g_{n-k}-\sum_{k=1}^{n-1} \frac{\beta_1^k}{2}  \left ((1-\beta_1) \alpha L \sum_{l=1}^{k}  \Vert m_{n-l} \Vert _2^2+  \Vert g_{n-k}  \Vert _2^2 \frac{\alpha L k}{ (1-\beta_1)} \right ) \\
+\end{eqnarray*}
+
+\bigskip
+
+Par conséquent, en passant par l'espérance :
+.
+ \begin{eqnarray*}
+     \mathbb{E}[$G^T_n m_n ]&\geq& \sum_{k=0}^{n-1} \beta_1^k \mathbb{E}[G_{n-k}^T g_{n-k}] - \sum_{k=0}^{n-1} \frac{\beta_1^k}{2} \left ((1-\beta_1) \alpha L \sum_{l=1}^{k} \mathbb{E}[ \Vert m_{n-l} \Vert _2^2])+ \mathbb{E}[ \Vert g_{n-k}  \Vert _2^2] \frac{\alpha L k}{ (1-\beta_1)} \right ) \\ 
+ \end{eqnarray*}
+
+\bigskip
+
+Ce qui s'écrit également :
+
+ \begin{eqnarray*}
+     \mathbb{E}[$G^T_n m_n ]&\geq& \sum_{k=0}^{n-1} \beta_1^k \mathbb{E}[G_{n-k}^T g_{n-k}] - \alpha L \sum_{k=0}^{n-1} \frac{\beta_1^k}{2} 
+ \left ( \left ((1-\beta_1)  \sum_{l=1}^{k} \mathbb{E}[ \Vert m_{n-l} \Vert _2^2] \right )+ \frac{ k}{ (1-\beta_1)} \mathbb{E}[ \Vert g_{n-k}  \Vert _2^2] \right ) \\ 
+ \end{eqnarray*}  \hspace{\fill}(B17) 
+
+\bigskip
+
+On peut simplifier ce résultat en se rappelant que
+
+-d'après B2, $\mathbb{E}[ \Vert \nabla f(x) \Vert _2^2 ] \leq R^2 + \sigma^2$ donc aussi $\mathbb{E}[ \Vert g_{n-k} \Vert _2^2] \leq R^2 + \sigma^2
+
+- d'après notre résultat précedent B.11, on a majoré $\mathbb{E}[ \Vert m_{n-k} \Vert _2^2] \leq \frac{R^2+\sigma^2}{(1-\beta_1)^2}$
+
+\bigskip
+
+Ce qui donne : 
+
+\begin{eqnarray*}
+    \mathbb{E}[$G^T_n m_n ]&\geq& \sum_{k=1}^{n-1} \beta_1^k \mathbb{E}[G_{n-k}^T g_{n-k}] - \sum_{k=0}^{n-1} \frac{\beta_1^k}{2} \left (\left ( \alpha L \sum_{l=1}^{k} \frac{R^2+\sigma^2}{(1-\beta_1)} \right  )+ (R^2+\sigma^2) \frac{\alpha L k}{ 1-\beta_1} \right )  \\ 
+    &\geq& \sum_{k=0}^{n-1} \beta_1^k \mathbb{E}[G_{n-k}^T g_{n-k}] - \alpha L (R^2+\sigma^2) \sum_{k=1}^{n-1} \frac{\beta_1^k}{2} \left ( \left ( \frac{1}{(1-\beta_1)} \underbrace{\sum_{l=1}^{k} 1}_{=k}  \right )+  \frac{k}{ 1-\beta_1} \right )  \\ 
+    &=& \sum_{k=0}^{n-1} \beta_1^k \mathbb{E}[G_{n-k}^T g_{n-k}] - \frac{\alpha L (R^2+\sigma^2)}{1-\beta_1} \sum_{k=1}^{n-1}  \beta_1^k k   \\ 
+    &&\textrm{Factorisation par 1/(1-$\beta_1$) + le facteur /2 disparait en sommant 2 fois k}\\
+    
+\end{eqnarray*}
+
+\bigskip
+
+De plus, pour obtenir exactement B.18, trouvons une réécriture à partir de la "tower property" de l'espérance conditionnelle. 
+
+Cela nécessitera l'introduction de la proposition suivante :
+
+\bigskip
+
+\begin{prop}
+    Pour tout $X$ vecteur aléatoire vérifiant $\mathbb{E}(\lvert X \lvert) < + \infty$, notons les $\omega_1,...,\omega_N$ des aléas indépendants entre eux, d'indice allant de 1 à N, et dont l'union donne $\Omega$.
+
+    On exprime l'espérance conditionnelle de X par rapport à $s \in \{1,..N\}$ de la manière suivante : 
+
+\begin{equation*}
+    \mathbb{E}_s (X) = \int_{\Omega} X(\omega_1,..., \omega_N) d \mathbb{P}_{s+1}(\omega_{s+1})... d\mathbb{P}_N(\omega_N)
+\end{equation*}
+
+$\mathbb{E}_s (X) $ représente une variable aléatoire qui ne dépend que des aléas jusqu'à l'indice $s$ : $\omega_1,...\omega_{s}$. 
+
+Et l'on peut noter de cette façon $\mathbb{E}(X)=\mathbb{E}_0(X)$
+
+\bigskip
+
+
+(Propriétés de l'espérance conditionnelle)
+    Le "théorème des 3 perpendiculaires" ou "Tower property" stipule que :
+
+\begin{equation*}
+   \forall s,q \quad \text{tels que} \quad s\leq q, \quad \mathbb{E}_s[\mathbb{E}_q[X]]= \mathbb{E}_s[X]
+\end{equation*}
+
+\end{prop}
+
+
+\bigskip
+
+\begin{eqnarray*}
+    \mathbb{E}[G_{n-k}^T g_{n-k}]&=& \mathbb{E}[\nabla F(x_{n-k-1})^T \nabla f(x_{n-k-1})  ]\\
+    &=& \underbrace{\mathbb{E}}_{\mathbb{E}_0}[ \mathbb{E}_{n-k-1} [\nabla F(x_{n-k-1})^T \nabla f_{n-k}(x_{n-k-1}) ] ] \textrm{ \hspace{10} : propriété de l'espérance conditionnelle, $0 \leq n-k-1$} \\
+    && \\
+    &&\textrm{ On calcule sur $\mathbb{E}_{n-k-1}$ l'espérance en ne comptant l'aléa que jusqu'à $n-k-1^$ et pas au-delà} \\
+\end{eqnarray*}
+
+$\forall  \hspace{5} n,k \hspace{5} f_{n-k}$ ne dépend que des aléas $\omega_s$ tel que $s\leq n-k$ 
+
+et $x_{n-k-1}$ ne dépend que des aléas $\omega_s$ tel que $s\leq n-k-1$
+
+Mentionnons également que les $f_i$ sont tirés de manière indépendante à ce qui se passe avant, 
+
+
+On écrit, d'après la proposition ci-dessus, \begin{eqnarray*}
+    \mathbb{E}_{n-k-1}[\nabla f_{n-k}(x_{n-k-1})] &=&  \int_{\Omega} \nabla f_{n-k}(\omega_{1},..., \underline{\omega_{n-k}},x_{n-k-1} (\omega_1,...,\omega_{n-k-1}) ) d\mathbb{P}_{n-k}( \underline{\omega_{n-k}})... d \mathbb{P}_N(\omega_N) \\
+    &=& \int_{\Omega} \nabla f_{n-k}(\omega_{n-k},x_{n-k-1}(\omega_1,...,\omega_{n-k-1})) d\mathbb{P}_{n-k}(\omega_{n-k})... d \mathbb{P}_N(\omega_N)\\
+    &=& \nabla F(x_{n-k-1}(\omega_1,...,\omega_{n-k-1})) \textrm{ car $\mathbb{E}[\nabla f] = \nabla F$}
+\end{eqnarray*}
+
+Et on remarque alors que :
+
+\begin{eqnarray*}
+   \mathbb{E}[G_{n-k}^T g_{n-k}]  &=& \mathbb{E}[\nabla F(x_{n-k-1})^T \nabla F(x_{n-k-1})]\\
+    %% &&\textrm{Car $\mathbb{E}[\nabla f] = \nabla F$ et car l'aléa est sur f et pas sur F}\\
+    &=& \mathbb{E}[ \Vert  G_{n-k} \Vert ^2_2] \hspace{15} \textrm{Car $G_{n-k}^T G_{n-k} =  \Vert G_{n-k} \Vert _2^2$}\\
+   
+\end{eqnarray*}
+
+
+D'où en injectant la nouvelle expression de $\mathbb{E}[G_{n-k}^T g_{n-k}]$ on a finalement : 
+
+\begin{equation*}
+    \mathbb{E}[\left G^T_n m_n \right ] \geq \sum_{k=0}^{n-1} \beta_1^k  \mathbb{E}[\left \Vert  G_{n-k} \Vert ^2_2  \right] - \frac{\alpha L (R^2+\sigma^2)}{1-\beta_1} \sum_{k=1}^{n-1}  \beta_1^k k  \hspace{1cm}  \hspace{\fill}(B18-B19)   \label{gournay}  
+\end{equation*}
+
+\bigskip
+
+En appliquant alors le Lemme B.2/Résultat B.12, en prenant pour paramètres $a=\beta_1$, $Q=n-1$ et $q=k$, on a :$\sum_{k=i}^{n-1} \beta_1^k k \leq \frac{\beta_1}{(1-\beta_1)^2}$
+
+\bigskip
+
+D'où B19 donne :
+
+
+\begin{eqnarray*}
+    \mathbb{E}[ \left G^T_n m_n \right ] &\geq& \sum_{k=0}^{n-1} \beta_1^k  \mathbb{E}[ \Vert  G_{n-k} \Vert ^2_2] - \frac{\alpha L (R^2+\sigma^2)}{1-\beta_1} \frac{\beta_1}{(1-\beta_1)^2}  \\
+    &\geq& \sum_{k=0}^{n-1} \beta_1^k  \mathbb{E}[\Vert G_{n-k} \Vert ^2_2] - \frac{\alpha L \beta_1 (R^2+\sigma^2)}{(1-\beta_1)^3} \\
+\end{eqnarray*}  \hspace{\fill}(B20) 
+
+\bigskip
+
+\newtheorem*{theo4}{Preuve du théorème B.1, cas avec inertie}
+
+\begin{theo4} :
+
+\end{theo4}
+
+Nous allons finir par prouver $\mathbb{E}[ \Vert \nabla F(x_\tau) \Vert ^2_2] \leq \frac{1- \beta_1}{\alpha \tilde{N}} (F(x_0)-F_*) + \frac{N}{\tilde{N}} \frac{\alpha L (1+\beta_1) (R^2+ \sigma^2)}{2 (1-\beta_1)^2}$
+
+\bigskip
+
+
+On sait que F est L-smooth et à gradient L-Lispchitz.
+En appliquant B3, comme d'après le schéma de la SGD numéro \ref{eq:equation1}, page \pageref{eq:equation1}, $ x_n-x_{n-1}  = - \alpha m_n$, alors on a :
+
+
+
+\begin{eqnarray*}
+    \Vert  \nabla F(x_n) - \nabla F(x_{n-1}) \Vert _2 &\leq& L  \Vert x_n-x_{n-1} \Vert _2 \\
+ &\leq& L  \Vert \alpha m_n \Vert _2 \hspace{10} \textrm{Avec $m_n= \beta_1 m_{n-1} + \nabla f_n(x_{n-1}))$} \
+
+ \end{eqnarray*}
+
+De plus, il est même possible d'aller plus loin : comme F est différentiable et à gradient L-Lipschitz, elle vérifie la propriété suivante : 
+
+\begin{eqnarray*}
+        F(x+h)&=&F(x)+ \nabla F(x)^T h + O(\Vert h \Vert) \\
+        \textrm{ ie } F(x_{n-1} - \alpha m_n)&=&F(x_{n-1})- \nabla F(x_{n-1})^T (\alpha m_n) + O(\Vert   \alpha m_n \Vert)
+\end{eqnarray*}
+
+\bigskip
+
+Et les propriétés du développement de Taylor appliquées aux fonctions différentiables à gradient L-lipschitz donnent : 
+
+\begin{eqnarray*}
+    \left | F(x_{n-1})-F(x_n)- \nabla F(x_{n-1})^T (x_n- x_{n-1})  \right | &\leq & \frac{L}{2} \Vert x_n- x_{n-1} \Vert _2^2 \\
+    $\displaystyle\left\lvert   F(x_{n-1})-F(x_n)- ( \nabla F(x_{n-1})^T) (- \alpha m_n ) \right \rvert &\leq& \frac{L}{2} \Vert \alpha m_n \Vert _2^2 \\
+      -F(x_{n-1})+F(x_n)+ \nabla F(x_{n-1})^T (- \alpha m_n)  &\leq& \frac{\alpha^2 L}{2}  \Vert m_n \Vert ^2_2 \\
+      F(x_n) &\leq& F(x_{n-1})- \alpha G_n^T m_n + \frac{\alpha^2 L}{2}  \Vert m_n \Vert ^2_2  
+\end{eqnarray*}  \hspace{\fill}(B21) 
+
+\bigskip
+
+Cette propriété provient de l'expression de la formule de Taylor avec reste intégral, qui pour une fonction f $n+1$ fois continument différentiable, s'écrit\footnote{Plus de détails dans le Lemme 2.13 du cours de M.Weiss en Bibliographie }
+\begin{equation*}
+    f(b)=f(a)+\frac{b-a}{1!}+... + \frac{(b-a)^n}{n!} f^{(n)}(a) + \int_{a}^{b} \frac{(b-t)^n}{n!} f^{(n+1)}(t)dt
+\end{equation*}
+
+
+
+%%\begin{eqnarray*}
+%%    && \\
+ %%   && \textrm{Ainsi : en effectuant un développement de Taylor ordre 2 de %%$F(x_n)$ :} \\
+%%    && \\
+ %%   F(x_n) &=& F(x_{n-1} - \alpha m_n)\\
+%%    %%&=& F(x_{n-1}) - \nabla F(x_{n-1}) \alpha m_n + \frac{\nabla F(x_{n-1}) %%%%(\alpha m_n)^2}{2}+...
+%%    &=& F(x_{n-1}) - \nabla F(x_{n-1})^T \alpha m_n + \sum_{k=2}^{N} (-\alpha m_n) ^k R_k(x_n) \\
+ %%   && \hspace{15} \textrm{ avec $R_k(x_n)$ le reste qui tend vers 0} \\
+%%    &&
+%%    & \leq& F(x_{n-1}) - \nabla F(x_{n-1}) \alpha m_n +\frac{ (\alpha m_n)}{2} \Vert  \nabla F(x_n) - \nabla F(x_{n-1}) \Vert _2 \\
+ %%   &\leq& F(x_{n-1})- \alpha G_n^T m_n + \frac{\alpha^2 L}{2}  \Vert m_n \Vert ^2_2 \hspace{1cm} \tag{(B21)} \\
+   
+    
+%% \end{eqnarray*}
+
+\bigskip
+
+En passant à l'espérance, sachant que $ \mathbb{E} [\Vert m_n \Vert ^2_2]=\frac{R^2+\sigma^2}{(1-\beta_1)^2} $ et $ \mathbb{E}[G_n^T m_n] \geq \sum_{k=0}^{n-1} \beta_1^k  \mathbb{E}[\Vert G_{n-k} \Vert ^2_2] - \frac{\alpha L \beta_1 (R^2+\sigma^2)}{(1-\beta_1)^3}$ cette inégalité cela donne par linéarité : 
+
+\begin{eqnarray*}
+    \mathbb{E}[F(x_n)] &\leq& \mathbb{E}[F(x_{n-1})]- \alpha \mathbb{E}[G_n^T m_n] + \frac{\alpha^2 L}{2} \mathbb{E} [\Vert m_n \Vert ^2_2] \\
+    &\leq& \mathbb{E}[F(x_{n-1})]- \alpha \left ( \sum_{k=0}^{n-1} \beta_1^k \mathbb{E}[ \Vert G_{n-k} \Vert _2^2] \right ) + \frac{\alpha^2 L \beta_1 (R^2+\sigma^2)}{(1-\beta_1)^3} + \frac{\alpha^2 L (R^2+ \sigma^2)}{2 (1-\beta_1)^2} \\
+    && \textrm{ En mettant les derniers termes au même dénominateur : } \\
+    &\leq& \mathbb{E}[F(x_{n-1})]- \alpha \left ( \sum_{k=0}^{n-1} \beta_1^k \mathbb{E}[ \Vert G_{n-k} \Vert _2^2] \right ) + \frac{\alpha^2 L (1+\beta_1) (R^2+ \sigma ^2)}{2(1-\beta_1)^3}\\
+\end{eqnarray*}  \hspace{\fill}(B22) 
+
+\bigskip
+
+On isole le terme en $\alpha$ de l'autre côté de l'inégalité et on somme sur $n\in \{1,...,N\}$.
+
+\bigskip
+
+Il ne restera de $\mathbb{E}[F(x_{n-1})]-\mathbb{E}[F(x_{n})]$ que le dernier terme et le premier terme que la somme sur N n'annulera pas, ie $\mathbb{E}[F(x_{0})]-\mathbb{E}[F(x_N)]$ ce qui donne encore $F(x_0)-\mathbb{E}[F(x_{N})}]$ ($x_0$ étant le premier terme, son espérance est une somme du seul terme $x_0$ et vaut donc $x_0$).
+
+\bigskip
+
+Le dernier terme, quant à lui, ne dépendant pas de n, sera sommé N fois et donc multiplié par un facteur N en passant à la somme. Cela donne donc :
+
+\bigskip
+
+\begin{eqnarray*}
+    \alpha \sum_{n=1}^{N} \sum_{k=0}^{n-1} \beta_1^k \mathbb{E}[ \Vert G_{n-k} \Vert ^2_2] \leq F(x_0)-\mathbb{E}[F(x_N)]+ N \frac{\alpha^2 L (1+\beta_1)(R^2+\sigma^2)}{2(1-\beta_1)^3}
+\end{eqnarray*}  \hspace{\fill}(B23) 
+
+\bigskip
+
+Posons, pareillement à ce que nous avons fait pour la section du SGD sans inertie, la variable  $A=\alpha \sum\limits_{\substack{n=1}}^{N} \sum\limits_{\substack{k=0}}^{n-1} \beta_1^k \mathbb{E}[ \Vert G_{n-k} \Vert ^2_2]$:
+
+\bigskip
+
+Intéressons nous maintenant plus particulièrement à la réécriture de cette variable A et essayons de faire apparaitre une majoration de $\mathbb{E}[\Vert \nabla F(x_\tau) \Vert _2^2]$
+
+\bigskip
+
+En effet, on peut réécrire A sous la forme :
+
+\begin{eqnarray*}
+    A &=&\alpha \sum\limits_{\substack{n=1}}^{N} \sum\limits_{\substack{k=0}}^{n-1} \beta_1^k \mathbb{E} \left [ \Vert G_{n-k} \Vert ^2_2 \right] \\
+    && \\
+    && \textrm{En faisant le changement d'indice $i=n-k$, ie $k=n-i$, on a :} \\
+    && \\
+    &=& \alpha \sum\limits_{\substack{n=1}}^{N} \sum\limits_{\substack{i=1}}^{n} \beta_1^{n-i} \mathbb{E} \left [ \Vert G_{i} \Vert ^2_2 \right ] \\
+    && \\
+    && \textrm{En appliquant la technique d'inversion de somme, pour que la somme en i vienne en $1^{er}$:} \\
+    && \textrm{Le domaine d'indice $\left \{
+\begin{array}{lcl}
+1 \leq n \leq N \\
+1 \leq i \leq n
+\end{array}
+\right.$donne $\left \{
+\begin{array}{lcl}
+1 \leq i \leq N \\
+i \leq n \leq N
+\end{array}
+\right.$ (car $1 \leq i \leq n \leq N$), d'où:} \\
+    && \\
+    &=& \alpha \sum\limits_{\substack{i=1}}^{N} \underbrace{ \mathbb{E} \left [ \Vert G_{i} \Vert ^2_2 \right ]}_{\textrm{\tiny ne dépend pas de n}}  \sum\limits_{\substack{n=i}}^{N} \beta_1^{n-i} \\
+    &=& \alpha \sum\limits_{\substack{i=1}}^{N}  \mathbb{E} \left [ \Vert \nabla F(x_{i-1}) \Vert ^2_2 \right ]\sum\limits_{\substack{n=i}}^{N} \beta_1^{n-i} \\
+    &=& \alpha \sum\limits_{\substack{i=1}}^{N}  \mathbb{E} \left [ \Vert \nabla F(x_{i-1}) \Vert ^2_2 \right ]\sum\limits_{\substack{n=i}}^{N} \beta_1^{n-i} \\
+    && \textrm{\underline{Rappel} : Formule alternative pour une suite géométrique : ($1^{er}$ terme - dernier terme x raison )/(1-raison)} \\
+    &=& \alpha \sum\limits_{\substack{i=1}}^{N}  \mathbb{E} \left [ \Vert \nabla F(x_{i-1}) \Vert ^2_2 \right ] \frac{1-\beta_1^{N-i}* \beta_1}{\underbrace{1-\beta_1}_{\textrm{\tiny ne dépend pas de n}}} \\
+    &=& \frac{\alpha}{1-\beta_1} \sum\limits_{\substack{i=1}}^{N}  \mathbb{E} \left [ \Vert \nabla F(x_{i-1}) \Vert ^2_2 \right ] ( 1-\beta_1^{N-i+1}) \\
+    && \textrm{Décalage d'indice $i=i-1$} \\
+    &=& \frac{\alpha}{1-\beta_1} \sum\limits_{\substack{i=0}}^{N-1}  \mathbb{E} \left [ \Vert \nabla F(x_{i}) \Vert ^2_2 \right ] ( 1-\beta_1^{N-i}) \\
+\end{eqnarray*}
+
+\bigskip
+
+On a ainsi, en définitive : $A= \frac{\alpha}{1-\beta_1} \sum\limits_{\substack{i=0}}^{N-1}  \mathbb{E} \left [ \Vert \nabla F(x_{i}) \Vert ^2_2 \right ] ( 1-\beta_1^{N-i})$ 
+
+\bigskip
+
+Or, par identification, $( 1-\beta_1^{N-i})$ correspond à la distribution donnnée avec la définition de l'indice $\tau$ sur $\{0,...,N-1 \}$ aléatoirement tiré
+
+\bigskip
+
+Donc i vérifie B5 et donc les propriétés données par $\tau$ 
+
+\bigskip
+
+Et comme
+\begin{eqnarray*}
+    \sum\limits_{\substack{i=0}}^{N-1} 1 - \beta_1^{N-i} &=& \sum\limits_{\substack{i=0}}^{N-1} 1 - \sum\limits_{\substack{i=0}}^{N-1} \beta_1^{N-i} \\
+    &=& N- \frac{\beta_1-\beta_1^N*\beta_1}{1-\beta_1} \\
+    &=& N- \beta_1 \frac{1-\beta_1^N}{1-\beta_1} \\
+    &\geq& N - \frac{\beta_1}{1-\beta_1} = \tilde{N}
+\end{eqnarray*}
+
+Alors en appliquant cette majoration sur l'expression de A :
+\begin{eqnarray*}
+    A= \frac{\alpha}{1-\beta_1} \sum\limits_{\substack{i=0}}^{N-1}  \mathbb{E} \left [ \Vert \nabla F(x_{i}) \Vert ^2_2 \right ] ( 1-\beta_1^{N-i}) \geq \frac{\alpha \tilde{N}}{1-\beta_1}   \mathbb{E} \left [ \Vert \nabla F(x_{\tau}) \Vert ^2_2 \right ]  
+\end{eqnarray*}  \hspace{\fill}(B25) 
+
+\bigskip
+
+En reprenant l'inégalité B.23 et en remplaçant A par sa nouvelle expression, de la même manière que pour le SGD sans inertie, nous obtenons pour finir la majoration souhaitée pour l'espérance du gradient de notre fonction objectif F, ie le théorème B.1 :
+\begin{eqnarray*}
+    \alpha \sum_{n=1}^{N} \sum_{k=0}^{n-1} \beta_1^k \mathbb{E}[ \Vert G_{n-k} \Vert ^2_2] &\leq& F(x_0)-\mathbb{E}[F(x_N)]+ N \frac{\alpha^2 L (1+\beta_1)(R^2+\sigma^2)}{2(1-\beta_1)^3} \\
+    \frac{\alpha \tilde{N}}{1-\beta_1} \sum\limits_{\substack{i=0}}^{N-1}  \mathbb{E} \left [ \Vert \nabla F(x_{\tau}) \Vert ^2_2 \right ] &\leq& F(x_0)-\mathbb{E}[F(x_N)]+ N \frac{\alpha^2 L (1+\beta_1)(R^2+\sigma^2)}{2(1-\beta_1)^3} \\
+    && \\
+    && \textrm{En isolant l'espérance souhaitée $\mathbb{E} \left [ \Vert \nabla F(x_{\tau}) \Vert ^2_2 \right ]$ :} \\
+    && \\
+       \mathbb{E} \left [ \Vert \nabla F(x_{\tau}) \Vert ^2_2 \right ] &\leq& \frac{1-\beta_1}{\alpha \tilde{N}} \left (F(x_0)-\mathbb{E}[F(x_N)] \right ) + \frac{1-\beta_1}{\alpha \tilde{N}} N \frac{\alpha^2 L (1+\beta_1)(R^2+\sigma^2)}{2(1-\beta_1)^3} \\
+        \mathbb{E} \left [ \Vert \nabla F(x_{\tau}) \Vert ^2_2 \right ] &\leq& \frac{1-\beta_1}{\alpha \tilde{N}} \left (F(x_0)-\mathbb{E}[F(x_N)] \right ) + \frac{N}{ \tilde{N}}  \frac{\alpha L (1+\beta_1)(R^2+\sigma^2)}{2(1-\beta_1)^2} \\
+         && \\
+    && \textrm{En utilisant B1, F admet une borne inférieure $F_*$} \\
+     && \textrm{$ \Rightarrow F(x_N) \geq F_* \Rightarrow \mathbb{E}[F(x_N)] \geq F_*$ car $\mathbb{E}[F(x_N)] \geq F(x_N)$, l'espérance somme les termes} \\
+    && \\
+       \mathbb{E} \left [ \Vert \nabla F(x_{\tau}) \Vert ^2_2 \right ] &\leq& \frac{1-\beta_1}{\alpha \tilde{N}} \left (F(x_0)-F_* \right ) + \frac{N}{ \tilde{N}}  \frac{\alpha L (1+\beta_1)(R^2+\sigma^2)}{2(1-\beta_1)^2}   \\
+\end{eqnarray*}  \hspace{\fill}(B26-B27) 
+
+\bigskip
+
+On a bien retrouvé pour la méthode de descente de gradient stochastique avec inertie le même type de majoration que dans le cas sans inertie pour l'espérance du gradient de la fonction objectif. Le théorème B1 a bien été démontré.
+
+
+\newpage
+
+\section{Bibliographie}
+
+\bibliographystyle{plain}
+
+\bibliography{bibliographie}
+
+\cite{Adaptative}
+\cite{defossez2022a}
+\cite{Kingma}
+\cite{Yang}
+\cite{Weiss}
+
+
+\end{document}
